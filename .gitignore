@@ -1,0 +1,51 @@
+
+# Terraform working dir & providers
+.terraform/
+
+# Terraform state & backups (keep them out of Git)
+*.tfstate
+*.tfstate.*
+terraform.tfstate
+terraform.tfstate.backup
+
+# Plans
+*.tfplan
+
+# Variable files (often sensitive)
+*.tfvars
+*.tfvars.json
+
+# Local override patterns
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Crash logs
+crash.log
+
+# Editor/OS noise
+*.log
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Keep the lock file (pins provider versions) — do NOT ignore this
+# .terraform.lock.hcl
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+*.log
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
