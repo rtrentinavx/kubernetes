@@ -1,17 +1,31 @@
+# locals.tf
+locals {
+  vpc_name     = "${var.region}-${local.hash6}-vpc"
+  subnet_name  = "${var.region}-${local.hash6}-subnet"
+  router_name  = "${var.region}-${local.hash6}-router"
+  cluster_name = "${var.region}-${local.hash6}-cluster"
+  nat_name     = "${var.region}-${local.hash6}-nat"
+  hash_source  = format("%s|%s", var.project_id, var.region)
+  hash6        = substr(md5(local.hash_source), 0, 4)
+}
+
+
 resource "google_compute_network" "vpc" {
-  name                    = var.network_name
+  name                    = local.vpc_name
   project                 = var.project_id
   auto_create_subnetworks = false
   routing_mode            = "REGIONAL"
 }
 
+
 resource "google_compute_subnetwork" "gke" {
-  name                     = var.subnet_name
+  name                     = local.subnet_name
   project                  = var.project_id
   region                   = var.region
   network                  = google_compute_network.vpc.self_link
   ip_cidr_range            = var.subnet_cidr
   private_ip_google_access = true
+
 
   secondary_ip_range {
     range_name    = "pods-range"
@@ -46,14 +60,14 @@ resource "google_compute_subnetwork" "gke" {
 }
 
 resource "google_compute_router" "router" {
-  name    = "${var.network_name}-router"
+  name    = local.router_name
   region  = var.region
   network = google_compute_network.vpc.self_link
   project = var.project_id
 }
 
 resource "google_compute_router_nat" "nat" {
-  name                               = "${var.network_name}-nat"
+  name                               = local.nat_name
   router                             = google_compute_router.router.name
   region                             = var.region
   project                            = var.project_id
@@ -78,8 +92,8 @@ resource "google_service_account" "nodes" {
 }
 
 resource "google_container_cluster" "cluster" {
-  name     = var.cluster_name
-  location = var.cluster_location
+  name     = local.cluster_name
+  location = var.region
   project  = var.project_id
 
   network    = google_compute_network.vpc.self_link
@@ -94,8 +108,8 @@ resource "google_container_cluster" "cluster" {
 
   private_cluster_config {
     enable_private_nodes    = var.private_cluster
-    enable_private_endpoint = false
-    master_ipv4_cidr_block  = "172.16.0.0/28"
+    enable_private_endpoint = var.enable_private_endpoint
+    master_ipv4_cidr_block  = var.master_ipv4_cidr_block
   }
 
   master_authorized_networks_config {
@@ -129,7 +143,7 @@ resource "google_container_node_pool" "default" {
   name     = "np-default"
   project  = var.project_id
   cluster  = google_container_cluster.cluster.name
-  location = var.cluster_location
+  location = var.region
 
   node_count = var.node_count
 
@@ -144,8 +158,11 @@ resource "google_container_node_pool" "default" {
 
     oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
 
-    shielded_instance_config { enable_secure_boot = true }
-    tags = ["gke-nodes"]
+    shielded_instance_config {
+      enable_secure_boot = true
+    }
+
+    tags = ["${local.cluster_name}-node-pool"]
   }
 
   management {
@@ -159,80 +176,9 @@ resource "google_container_node_pool" "default" {
   }
 }
 
-resource "kubernetes_namespace_v1" "argocd" {
-  metadata { name = var.argocd_namespace }
-  depends_on = [google_container_cluster.cluster]
-}
-
-resource "helm_release" "argocd" {
-  name       = "argocd"
-  namespace  = kubernetes_namespace_v1.argocd.metadata[0].name
-  repository = "https://argoproj.github.io/argo-helm"
-  chart      = "argo-cd"
-  version    = var.argocd_chart_version
-
-  create_namespace = true
-  # install_crds is no longer supported
-  wait    = true
-  timeout = 600
-
-  values = [yamlencode({
-    server         = { service = { type = "ClusterIP" } }
-    applicationSet = { enabled = true }
-  })]
-
-  depends_on = [google_container_cluster.cluster]
-}
-
-resource "null_resource" "wait_for_argocd_crd" {
-  depends_on = [helm_release.argocd]
-  provisioner "local-exec" {
-    command = <<EOT
-gcloud container clusters get-credentials ${var.cluster_name} --region ${var.cluster_location} --project ${var.project_id}
-kubectl wait --for=condition=Established crd/applications.argoproj.io --timeout=180s
-EOT
-  }
-}
-
-resource "kubernetes_manifest" "argocd_root_app" {
-  manifest = {
-    apiVersion = "argoproj.io/v1alpha1"
-    kind       = "Application"
-    metadata = {
-      name      = var.root_app_name
-      namespace = kubernetes_namespace_v1.argocd.metadata[0].name
-    }
-    spec = {
-      project = "default"
-      source = {
-        repoURL        = var.gitops_repo_url
-        targetRevision = var.gitops_repo_revision
-        path           = var.gitops_repo_path
-      }
-      destination = {
-        server    = "https://kubernetes.default.svc"
-        namespace = "default"
-      }
-      syncPolicy = {
-        automated = {
-          prune    = true
-          selfHeal = true
-        }
-        syncOptions = [
-          "CreateNamespace=true",
-          "PrunePropagationPolicy=foreground",
-          "PruneLast=true"
-        ]
-      }
-    }
-  }
-
-  depends_on = [null_resource.wait_for_argocd_crd]
-}
-
 resource "google_gke_backup_backup_plan" "plan" {
   count    = var.enable_backup ? 1 : 0
-  name     = "gke-backup-plan"
+  name     = "${local.cluster_name}-backup-plan"
   project  = var.project_id
   location = var.region
 

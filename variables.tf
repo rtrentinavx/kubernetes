@@ -8,13 +8,6 @@ variable "region" {
   type        = string
 }
 
-variable "network_name" {
-  type = string
-}
-variable "subnet_name" {
-  type = string
-}
-
 variable "subnet_cidr" {
   description = "Primary subnet CIDR for nodes"
   type        = string
@@ -42,32 +35,41 @@ variable "services_secondary_cidr" {
   }
 }
 
-variable "cluster_name" {
-  type = string
-}
-variable "cluster_location" {
-  type = string
+variable "master_ipv4_cidr_block" {
+  description = "CIDR block for GKE master authorized networks"
+  type        = string
+  default     = "172.16.0.0/28"
 }
 
 variable "gke_release_channel" {
-  type    = string
-  default = "REGULAR"
+  description = "GKE release channel for the cluster."
+  type        = string
+  default     = "REGULAR"
 }
 
 variable "node_machine_type" {
-  type = string
+  description = "Machine type for the GKE nodes."
+  type        = string
 }
 variable "node_count" {
-  type    = number
-  default = 1
+  description = "Initial number of nodes for the default node pool."
+  type        = number
+  default     = 1
 }
 variable "private_cluster" {
-  type    = bool
-  default = true
+  description = "Whether to create a private GKE cluster."
+  type        = bool
+  default     = true
+}
+
+variable "enable_private_endpoint" {
+  description = "Whether to create a private endpoint for the GKE cluster master."
+  type        = bool
+  default     = true
 }
 
 variable "master_authorized_networks" {
-  description = "CIDRs allowed to access the control plane"
+  description = "List of authorized networks for the GKE master."
   type = list(object({
     cidr_block   = string
     display_name = string
@@ -75,75 +77,37 @@ variable "master_authorized_networks" {
 }
 
 variable "node_pool_min_count" {
-  type    = number
-  default = 1
+  description = "Minimum number of nodes for the default node pool autoscaling."
+  type        = number
+  default     = 1
 }
+
 variable "node_pool_max_count" {
-  type    = number
-  default = 3
-}
-
-variable "kubeconfig_path" {
-  type        = string
-  default     = "~/.kube/config"
-  description = "Path to kubeconfig used by providers"
-}
-
-variable "argocd_namespace" {
-  type    = string
-  default = "argocd"
-}
-variable "argocd_chart_version" {
-  type        = string
-  default     = "5.51.6" # update as needed
-  description = "Version of argo/argo-cd Helm chart"
-}
-
-variable "gitops_repo_url" {
-  type        = string
-  description = "Git URL for the repo that contains your Argo CD root application (HTTPS or SSH)"
-}
-
-variable "gitops_repo_path" {
-  type        = string
-  default     = "clusters/prod"
-  description = "Path within the repo to manifests (Kustomize/Helm) for the root app"
-}
-
-variable "gitops_repo_revision" {
-  type        = string
-  default     = "main"
-  description = "Git revision (branch/tag) for the root app"
-}
-
-variable "root_app_name" {
-  type        = string
-  default     = "root-app"
-  description = "Name of the Argo CD Application used as App-of-Apps"
+  description = "Maximum number of nodes for the default node pool autoscaling."
+  type        = number
+  default     = 3
 }
 
 variable "enable_backup" {
+  description = "Whether to enable GKE Backup for the cluster."
   type        = bool
   default     = true
-  description = "Create a basic Backup for GKE plan for the cluster (namespace-wide example)"
 }
 
 variable "backup_namespace" {
+  description = "The namespace to include in the GKE backup."
   type        = string
   default     = "default"
-  description = "Namespace to include in the example backup plan"
 }
 
 variable "backup_name" {
+  description = "The name of the application to include in the GKE backup."
   type        = string
   default     = "default"
-  description = "Name of the backup plan"
 }
 
 variable "backup_retention_days" {
+  description = "Number of days to retain backups."
   type        = number
   default     = 7
-  description = "Retention for backups created by the plan"
 }
-
-
