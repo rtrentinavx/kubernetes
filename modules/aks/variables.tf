@@ -4,10 +4,20 @@ variable "address_space" {
   type        = list(string)
 }
 
-variable "aks_identity_type" {
-  description = "The type of identity used for the AKS cluster."
-  type        = string
+variable "network_subnets" {
+  description = "Network subnet configuration. Includes standard subnets, AKS subnets, and special subnets."
+  type = object({
+    standard = optional(map(string), {})
+    aks = object({
+      nodes      = string
+      user_pools = optional(map(string), {})
+    })
+    bastion   = optional(string)
+    gateway   = optional(string)
+    endpoints = optional(string)
+  })
 }
+
 
 variable "aks_network" {
   description = "Network configuration for the AKS cluster."
@@ -23,7 +33,7 @@ variable "aks_network" {
 variable "aks_node_pool" {
   description = "Configuration for the default AKS node pool."
   type = object({
-    name            = string
+    name            = optional(string)
     vm_size         = string
     node_count      = number
     max_pods        = number
@@ -31,14 +41,62 @@ variable "aks_node_pool" {
   })
 }
 
-variable "aks_node_subnet_cidr" {
-  description = "The CIDR block for the AKS node subnet."
-  type        = string
+variable "aks_user_node_pools" {
+  description = "Configuration for user AKS node pools. Subnets are defined in network_subnets.aks.user_pools."
+  type = map(object({
+    name                  = optional(string)
+    vm_size               = string
+    node_count            = number
+    max_pods              = number
+    os_disk_size_gb       = number
+    auto_scaling_enabled  = optional(bool, false)
+    min_count             = optional(number)
+    max_count             = optional(number)
+  }))
+  default = {}
 }
 
 variable "aks_sku_tier" {
   description = "The SKU tier for the AKS cluster."
   type        = string
+}
+
+variable "enable_container_registry" {
+  description = "Flag to enable or disable the creation of a container registry."
+  type        = bool
+  default     = true
+}
+
+variable "container_registry_sku" {
+  description = "The SKU for the container registry."
+  type        = string
+  default     = "Standard"
+}
+
+variable "aks_identity_type" {
+  description = "The type of identity used for the AKS cluster."
+  type        = string
+}
+
+variable "aks_cost_analysis_enabled" {
+  description = "Flag to enable cost analysis for the AKS cluster. When enabled, automatically uses Standard SKU tier."
+  type        = bool
+  default     = false
+}
+
+variable "aks_bootstrap_profile" {
+  description = "Bootstrap profile configuration for AKS. Requires private endpoint for container registry if using Cache artifact source."
+  type = object({
+    artifact_source       = optional(string, "Direct")  # Cache or Direct
+    container_registry_id = optional(string)
+  })
+  default = null
+}
+
+variable "enable_bastion" {
+  description = "Flag to enable or disable the creation of the Bastion host."
+  type        = bool
+  default = false
 }
 
 variable "bastion_public_ip_sku" {
@@ -47,44 +105,34 @@ variable "bastion_public_ip_sku" {
   default     = "Standard"
 }
 
-variable "bastion_subnet_cidr" {
-  description = "The CIDR block for the Bastion subnet."
-  type        = string
-}
-
-variable "enable_aks" {
-  description = "Flag to enable or disable the creation of the AKS cluster."
-  type        = bool
-}
-
-variable "enable_bastion" {
-  description = "Flag to enable or disable the creation of the Bastion host."
-  type        = bool
-}
-
 variable "enable_jumpbox_vm" {
   description = "Flag to enable or disable the creation of the jumpbox virtual machine."
   type        = bool
+  default     = false
+}
+
+variable "jumpbox_admin_ssh_key" {
+  description = "The SSH public key for the jumpbox admin user. If not provided, a key will be generated and stored in Key Vault."
+  type        = string
+  default     = ""
 }
 
 variable "enable_vpn_gateway" {
   description = "Flag to enable or disable the creation of the VPN gateway."
   type        = bool
+  default     = false
 }
 
-variable "gateway_subnet_cidr" {
-  description = "The CIDR block for the VPN Gateway subnet."
-  type        = string
-}
-
-variable "jumpbox_admin_ssh_key" {
-  description = "The SSH public key for the jumpbox admin user."
-  type        = string
+variable "enable_aks" {
+  description = "Flag to enable or disable the creation of the AKS cluster."
+  type        = bool
+  default     = true
 }
 
 variable "jumpbox_admin_username" {
   description = "The admin username for the jumpbox."
   type        = string
+  default     = "azureuser"
 }
 
 variable "jumpbox_image" {
@@ -95,26 +143,36 @@ variable "jumpbox_image" {
     sku       = string
     version   = string
   })
+  default = {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts-gen2"
+    version   = "latest"
+  }
 }
 
 variable "jumpbox_os_disk_type" {
   description = "The OS disk type for the jumpbox."
   type        = string
+  default     = "StandardSSD_LRS"
 }
 
 variable "jumpbox_public_ip_sku" {
   description = "The SKU for the jumpbox public IP address."
   type        = string
+  default     = "Standard"
 }
 
 variable "jumpbox_subnet_name" {
   description = "The name of the subnet for the jumpbox. This must exist in the 'subnets' variable."
   type        = string
+  default     = "mgmt"
 }
 
 variable "jumpbox_vm_size" {
   description = "The size of the jumpbox virtual machine."
   type        = string
+  default     = "Standard_B2ms"
 }
 
 variable "key_vault_name_override" {
@@ -135,17 +193,6 @@ variable "region_codes" {
   default     = {}
 }
 
-variable "subnets" {
-  description = "A map of subnet names to CIDR blocks."
-  type        = map(string)
-}
-
-variable "subscription_name" {
-  description = "The name of the Azure subscription to use."
-  type        = string
-  default     = null
-}
-
 variable "tags" {
   description = "A map of tags to add to all resources."
   type        = map(string)
@@ -155,21 +202,34 @@ variable "tags" {
 variable "vpngw_active_active" {
   description = "Flag to enable or disable active-active mode for the VPN gateway."
   type        = bool
+  default     = false
 }
 
 variable "vpngw_enable_bgp" {
   description = "Flag to enable or disable BGP for the VPN gateway."
   type        = bool
+  default     = false
+}
+
+variable "vpngw_client_configuration" {
+  description = "VPN client configuration settings for point-to-site VPN. Azure AD authentication can be configured in Azure Portal after deployment."
+  type = object({
+    address_space         = list(string)
+    vpn_client_protocols  = optional(list(string), ["OpenVPN"])
+  })
+  default = null
 }
 
 variable "vpngw_public_ip_sku" {
   description = "The SKU for the VPN gateway public IP address."
   type        = string
+  default     = "Standard"
 }
 
 variable "vpngw_sku" {
   description = "The SKU for the VPN gateway."
   type        = string
+  default     = "VpnGw2"
 }
 
 variable "ssh_key_algorithm" {
@@ -189,10 +249,16 @@ variable "subscription_id" {
   type        = string
 }
 
+variable "subscription_name" {
+  description = "The name of the Azure subscription to use."
+  type        = string
+  default     = null
+}
+
 variable "enable_key_vault" {
   description = "Flag to enable or disable the creation of the Key Vault."
   type        = bool
-  default     = false
+  default     = true 
 }
 
 variable "key_vault_sku_name" {
@@ -235,6 +301,12 @@ variable "kv_secret_name_public" {
   description = "The name of the Key Vault secret for the public SSH key."
   type        = string
   default     = "jumpbox-ssh-public-key"
+}
+
+variable "enable_aks_kv_csi_driver" {
+  description = "Flag to enable the Azure Keyvault CSI driver addon in AKS, allowing pods to mount Key Vault secrets as volumes."
+  type        = bool
+  default     = true
 }
 
 variable "api_server_authorized_ip_ranges" {

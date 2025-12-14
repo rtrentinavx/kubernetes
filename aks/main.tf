@@ -1,307 +1,299 @@
-locals {
-  subscription_display_name = var.subscription_name != null ? var.subscription_name : data.azurerm_subscription.current.display_name
-  region_code               = lookup(var.region_codes, var.location, var.location)
-  hash4                     = substr(md5("${lower(local.subscription_display_name)}-${lower(var.location)}"), 0, 4)
-  prefix                    = lower("${local.region_code}-${local.hash4}")
+#################################################################################
+# DATA SOURCES
+#################################################################################
 
-  common_tags = merge(
-    {
-      subscription = local.subscription_display_name
-      region       = var.location
-      name_prefix  = local.prefix
-    },
-    var.tags
-  )
+data "azurerm_subscription" "current" {}
 
-  kv_base_name   = "kv${replace(local.prefix, "-", "")}"
-  key_vault_name = var.key_vault_name_override != null && var.key_vault_name_override != "" ? var.key_vault_name_override : local.kv_base_name
-
-}
-
-# -----------------------------
-# Resource Groups
-# -----------------------------
-resource "azurerm_resource_group" "core" {
-  name     = "rg-${local.prefix}-core"
-  location = var.location
-  tags     = local.common_tags
-}
-
-resource "azurerm_resource_group" "aks" {
-  count    = var.enable_aks ? 1 : 0
-  name     = "rg-${local.prefix}-aks"
-  location = var.location
-  tags     = local.common_tags
-}
-
-# -----------------------------
-# VNet and subnets
-# -----------------------------
-resource "azurerm_virtual_network" "vnet" {
-  name                = "vnet-${local.prefix}"
-  resource_group_name = azurerm_resource_group.core.name
-  location            = var.location
-  address_space       = var.address_space
-  tags                = local.common_tags
-}
-
-# Regular subnets
-resource "azurerm_subnet" "standard" {
-  for_each             = var.subnets
-  name                 = "${each.key}-subnet-${local.prefix}"
-  resource_group_name  = azurerm_resource_group.core.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = [each.value]
-}
-
-# Bastion subnet
-resource "azurerm_subnet" "bastion" {
-  count                = var.enable_bastion ? 1 : 0
-  name                 = "AzureBastionSubnet"
-  resource_group_name  = azurerm_resource_group.core.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = [var.bastion_subnet_cidr]
-}
-
-# Gateway subnet (VPN)
-resource "azurerm_subnet" "gateway" {
-  count                = var.enable_vpn_gateway ? 1 : 0
-  name                 = "GatewaySubnet"
-  resource_group_name  = azurerm_resource_group.core.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = [var.gateway_subnet_cidr]
-}
-
-# AKS nodes subnet
-resource "azurerm_subnet" "aks_nodes" {
-  count                = var.enable_aks ? 1 : 0
-  name                 = "aks-nodes-${local.prefix}"
-  resource_group_name  = azurerm_resource_group.core.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = [var.aks_node_subnet_cidr]
-}
-
-# -----------------------------
-# Azure Bastion
-# -----------------------------
-resource "azurerm_public_ip" "bastion" {
-  count               = var.enable_bastion ? 1 : 0
-  name                = "pip-bastion-${local.prefix}"
-  resource_group_name = azurerm_resource_group.core.name
-  location            = var.location
-  allocation_method   = "Static"
-  sku                 = var.bastion_public_ip_sku
-  tags                = local.common_tags
-}
-
-resource "azurerm_bastion_host" "bastion" {
-  count               = var.enable_bastion ? 1 : 0
-  name                = "bastion-${local.prefix}"
-  resource_group_name = azurerm_resource_group.core.name
-  location            = var.location
-
-  ip_configuration {
-    name                 = "bastion-ipcfg"
-    subnet_id            = azurerm_subnet.bastion[0].id
-    public_ip_address_id = azurerm_public_ip.bastion[0].id
-  }
-
-  tags = local.common_tags
-}
-
-
-# ---------------------------------
-# Client config (for tenant_id/principal_id)
-# ---------------------------------
 data "azurerm_client_config" "current" {}
 
-# ---------------------------------
-# TLS SSH key for jumpbox (generated when jumpbox enabled)
-# ---------------------------------
-resource "tls_private_key" "jumpbox" {
-  count     = var.enable_jumpbox_vm ? 1 : 0
-  algorithm = var.ssh_key_algorithm
-  # Only set rsa_bits when algorithm == "RSA"
-  rsa_bits = var.ssh_key_algorithm == "RSA" ? var.ssh_key_rsa_bits : null
+# Get the public IP of the machine running Terraform
+data "http" "terraform_runner_ip" {
+  url = "https://api.ipify.org"
 }
 
-# ---------------------------------
-# Key Vault 
-# ---------------------------------
+#################################################################################
+# LOCALS
+#################################################################################
 
-resource "azurerm_key_vault" "kv" {
-  count                      = var.enable_key_vault ? 1 : 0
-  name                       = local.key_vault_name
-  resource_group_name        = azurerm_resource_group.core.name
-  location                   = var.location
-  tenant_id                  = data.azurerm_client_config.current.tenant_id
-  sku_name                   = var.key_vault_sku_name
-  purge_protection_enabled   = var.key_vault_purge_protection_enabled
-  soft_delete_retention_days = var.key_vault_soft_delete_retention_days
-  enable_rbac_authorization  = var.key_vault_enable_rbac
-
-  tags = local.common_tags
+locals {
+  subscription_id = "47ab116c-8c15-4453-b06a-3fecd09ebda9"
+  location          = "eastus"
+  region_codes = {
+    eastus      = "eus"
+    westus      = "wus"
+    westeurope  = "weu"
+    eastus2     = "eus2"
+    centralus   = "cus"
+    southcentralus = "scs"
+  }
+  common_tags = {
+    environment = "production"
+    managed_by  = "terraform"
+  }
+  
+  # GitHub configuration for Flux
+  github_owner = "rtrentinavx" 
+  github_repo  = "k8sfluxops"
+  github_token_secret_name = "flux-github-token"
+  
+  # Get Terraform runner's public IP and add /32 CIDR
+  terraform_runner_ip = "${chomp(data.http.terraform_runner_ip.response_body)}/32"
+  
+  # API server authorized IP ranges: include Terraform runner + Bastion subnet
+  api_server_authorized_ips = concat(
+    ["${local.terraform_runner_ip}"],
+    ["10.10.100.0/27"]
+  )
 }
 
-resource "azurerm_role_assignment" "kv_secrets_officer" {
-  count                = var.enable_key_vault && var.key_vault_enable_rbac ? 1 : 0
-  scope                = azurerm_key_vault.kv[0].id
-  role_definition_name = var.key_vault_rbac_role_name # e.g., "Key Vault Secrets Officer"
-  principal_id         = data.azurerm_client_config.current.object_id
-}
+module "aks_production" {
+  source = "../modules/aks"
 
+  location          = local.location
+  subscription_id   = local.subscription_id
+  region_codes      = local.region_codes
+  tags              = merge(local.common_tags, { cluster_name = "production" })
 
-# ---------------------------------
-# Store SSH keys as Vault secrets
-# ---------------------------------
-resource "azurerm_key_vault_secret" "jumpbox_private" {
-  count        = var.enable_key_vault && var.enable_jumpbox_vm ? 1 : 0
-  name         = var.kv_secret_name_private
-  value        = tls_private_key.jumpbox[0].private_key_pem
-  key_vault_id = azurerm_key_vault.kv[0].id
-}
-
-resource "azurerm_key_vault_secret" "jumpbox_public" {
-  count        = var.enable_key_vault && var.enable_jumpbox_vm ? 1 : 0
-  name         = var.kv_secret_name_public
-  value        = tls_private_key.jumpbox[0].public_key_openssh
-  key_vault_id = azurerm_key_vault.kv[0].id
-}
-
-
-# -----------------------------
-# Optional Jumpbox VM
-# -----------------------------
-resource "azurerm_public_ip" "jumpbox" {
-  count               = var.enable_jumpbox_vm ? 1 : 0
-  name                = "pip-jumpbox-${local.prefix}"
-  resource_group_name = azurerm_resource_group.core.name
-  location            = var.location
-  allocation_method   = "Static"
-  sku                 = var.jumpbox_public_ip_sku
-  tags                = local.common_tags
-}
-
-resource "azurerm_network_interface" "jumpbox" {
-  count               = var.enable_jumpbox_vm ? 1 : 0
-  name                = "nic-jumpbox-${local.prefix}"
-  resource_group_name = azurerm_resource_group.core.name
-  location            = var.location
-
-  ip_configuration {
-    name                          = "ipcfg"
-    subnet_id                     = azurerm_subnet.standard[var.jumpbox_subnet_name].id
-    private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.jumpbox[0].id
+  # Network configuration
+  address_space = ["10.10.0.0/16"]
+  network_subnets = {
+    standard = {
+      mgmt     = "10.10.0.0/24"
+      workload = "10.10.1.0/24"
+    }
+    aks = {
+      nodes      = "10.10.8.0/22"
+      user_pools = {}
+    }
+    bastion   = "10.10.100.0/27"
+    gateway   = "10.10.200.0/27"
+    endpoints = "10.10.250.0/27"
   }
 
-  tags = local.common_tags
-}
+  # AKS configuration
+  enable_aks            = true
+  aks_sku_tier          = "Free"
+  aks_identity_type     = "SystemAssigned"
+  aks_cost_analysis_enabled = false
 
-resource "azurerm_linux_virtual_machine" "jumpbox" {
-  count                 = var.enable_jumpbox_vm ? 1 : 0
-  name                  = "vm-jumpbox-${local.prefix}"
-  resource_group_name   = azurerm_resource_group.core.name
-  location              = var.location
-  size                  = var.jumpbox_vm_size
-  admin_username        = var.jumpbox_admin_username
-  network_interface_ids = [azurerm_network_interface.jumpbox[0].id]
-
-  os_disk {
-    name                 = "osdisk-jumpbox-${local.prefix}"
-    caching              = "ReadWrite"
-    storage_account_type = var.jumpbox_os_disk_type
-  }
-
-  source_image_reference {
-    publisher = var.jumpbox_image.publisher
-    offer     = var.jumpbox_image.offer
-    sku       = var.jumpbox_image.sku
-    version   = var.jumpbox_image.version
-  }
-
-  admin_ssh_key {
-    username   = var.jumpbox_admin_username
-    public_key = var.jumpbox_admin_ssh_key
-  }
-
-  tags = local.common_tags
-}
-
-# -----------------------------
-# VPN Gateway
-# -----------------------------
-resource "azurerm_public_ip" "vpn" {
-  count               = var.enable_vpn_gateway ? 1 : 0
-  name                = "pip-vpngw-${local.prefix}"
-  resource_group_name = azurerm_resource_group.core.name
-  location            = var.location
-  allocation_method   = "Static"
-  sku                 = var.vpngw_public_ip_sku
-  tags                = local.common_tags
-}
-
-resource "azurerm_virtual_network_gateway" "vpn" {
-  count               = var.enable_vpn_gateway ? 1 : 0
-  name                = "vpngw-${local.prefix}"
-  resource_group_name = azurerm_resource_group.core.name
-  location            = var.location
-  type                = "Vpn"
-  vpn_type            = "RouteBased"
-  sku                 = var.vpngw_sku
-  active_active       = var.vpngw_active_active
-  enable_bgp          = var.vpngw_enable_bgp
-
-  ip_configuration {
-    name                          = "vpngw-ipcfg"
-    public_ip_address_id          = azurerm_public_ip.vpn[0].id
-    private_ip_address_allocation = "Dynamic"
-    subnet_id                     = azurerm_subnet.gateway[0].id
-  }
-
-  tags = local.common_tags
-}
-
-# -----------------------------
-# AKS (Azure CNI)
-# -----------------------------
-resource "azurerm_kubernetes_cluster" "aks" {
-  count               = var.enable_aks ? 1 : 0
-  name                = "aks-${local.prefix}"
-  resource_group_name = azurerm_resource_group.aks[0].name
-  location            = var.location
-  dns_prefix          = "aks-${local.hash4}"
-  sku_tier            = var.aks_sku_tier
-
-  default_node_pool {
-    name            = var.aks_node_pool.name
-    vm_size         = var.aks_node_pool.vm_size
-    node_count      = var.aks_node_pool.node_count
-    vnet_subnet_id  = azurerm_subnet.aks_nodes[0].id
-    max_pods        = var.aks_node_pool.max_pods
-    os_disk_size_gb = var.aks_node_pool.os_disk_size_gb
-  }
-
-  network_profile {
-    network_plugin      = "azure"
+  aks_network = {
+    dns_service_ip      = "10.2.0.10"
+    service_cidr        = "10.2.0.0/24"
+    outbound_type       = "loadBalancer"
     network_plugin_mode = "overlay"
     network_data_plane  = "cilium"
-    dns_service_ip      = var.aks_network.dns_service_ip
-    service_cidr        = var.aks_network.service_cidr
-    outbound_type       = var.aks_network.outbound_type
   }
 
-  api_server_access_profile {
-    authorized_ip_ranges = var.api_server_authorized_ip_ranges
+  aks_node_pool = {
+    vm_size         = "Standard_DS3_v2"
+    node_count      = 3
+    max_pods        = 30
+    os_disk_size_gb = 128
   }
 
-  identity {
-    type = var.aks_identity_type
+  aks_user_node_pools = {}
+  api_server_authorized_ip_ranges = local.api_server_authorized_ips
+
+  # Container Registry
+  enable_container_registry = true
+  container_registry_sku    = "Standard"
+
+  # Key Vault
+  enable_key_vault                   = true
+  key_vault_sku_name                 = "standard"
+  key_vault_purge_protection_enabled = false
+  key_vault_soft_delete_retention_days = 7
+  key_vault_enable_rbac              = true
+  kv_secret_name_private             = "jumpbox-ssh-private-key"
+  kv_secret_name_public              = "jumpbox-ssh-public-key"
+
+  # Jumpbox
+  enable_jumpbox_vm           = true
+  jumpbox_subnet_name         = "workload"
+  jumpbox_admin_username      = "azureuser"
+  jumpbox_admin_ssh_key       = ""
+  jumpbox_vm_size             = "Standard_B2ms"
+  jumpbox_os_disk_type        = "StandardSSD_LRS"
+  jumpbox_public_ip_sku       = "Standard"
+  ssh_key_algorithm           = "RSA"
+  ssh_key_rsa_bits            = 4096
+
+  # Bastion
+  enable_bastion         = false
+  bastion_public_ip_sku  = "Standard"
+
+  # VPN
+  enable_vpn_gateway         = false
+  vpngw_client_configuration = null
+
+  # AKS features
+  enable_aks_kv_csi_driver = true
+  aks_bootstrap_profile    = null
+}
+
+# Uncomment to deploy additional clusters
+# module "aks_staging" {
+#   source = "../modules/aks"
+#   
+#   location          = local.location
+#   subscription_name = local.subscription_name
+#   subscription_id   = data.azurerm_subscription.current.subscription_id
+#   region_codes      = local.region_codes
+#   tags              = merge(local.common_tags, { cluster_name = "staging" })
+#   
+#   address_space = ["10.20.0.0/16"]
+#   network_subnets = {
+#     standard = {
+#       mgmt     = "10.20.0.0/24"
+#       workload = "10.20.1.0/24"
+#     }
+#     aks = {
+#       nodes      = "10.20.8.0/22"
+#       user_pools = {}
+#     }
+#     bastion   = "10.20.100.0/27"
+#     gateway   = "10.20.200.0/27"
+#     endpoints = "10.20.250.0/27"
+#   }
+#   
+#   aks_sku_tier                       = "Free"
+#   aks_identity_type                  = "SystemAssigned"
+#   aks_cost_analysis_enabled          = false
+#   enable_aks                         = true
+#   
+#   aks_network = {
+#     dns_service_ip      = "10.3.0.10"
+#     service_cidr        = "10.3.0.0/24"
+#     outbound_type       = "loadBalancer"
+#     network_plugin_mode = "overlay"
+#     network_data_plane  = "cilium"
+#   }
+#   
+#   aks_node_pool = {
+#     vm_size         = "Standard_DS3_v2"
+#     node_count      = 2
+#     max_pods        = 30
+#     os_disk_size_gb = 128
+#   }
+#   
+#   aks_user_node_pools             = {}
+#   api_server_authorized_ip_ranges = []
+#   enable_container_registry       = true
+#   container_registry_sku          = "Standard"
+#   enable_key_vault                = true
+#   key_vault_sku_name              = "standard"
+#   enable_jumpbox_vm               = true
+#   jumpbox_subnet_name             = "workload"
+#   enable_bastion                  = false
+#   enable_vpn_gateway              = false
+#   vpngw_client_configuration      = null
+#   enable_aks_kv_csi_driver        = true
+#   aks_bootstrap_profile           = null
+# }
+
+#################################################################################
+# FLUX + WEAVE GITOPS
+#################################################################################
+
+# Read GitHub token from Key Vault
+# data "azurerm_key_vault_secret" "github_token" {
+#   name         = local.github_token_secret_name
+#   key_vault_id = module.aks_production.key_vault_id
+# }
+
+# Note: Flux deployment requires:
+# 1. GitHub token stored in Key Vault with name: flux-github-token
+# 2. GitHub repository: https://github.com/rtrentinavx/k8sfluxops
+# 3. Deploy Flux separately after AKS cluster is ready
+#
+# Deploy Flux with this separate Terraform module:
+# cd ../flux && terraform init && terraform apply
+#
+# For now, this module is commented out to avoid Kubernetes auth issues during planning
+# Uncomment after the cluster is deployed and kubeconfig is configured
+
+# module "flux_weave" {
+#   source = "../modules/flux-weave"
+#   
+#   kubeconfig_path = "~/.kube/config"
+#   kubeconfig_context = module.aks_production.aks_cluster_name
+#   
+#   github_token = data.azurerm_key_vault_secret.github_token.value
+#   github_owner = local.github_owner
+#   github_repo  = local.github_repo
+#   
+#   flux_namespace   = "flux-system"
+#   weave_namespace  = "weave-gitops"
+# }
+
+#################################################################################
+# OUTPUTS
+#################################################################################
+
+output "production" {
+  value = {
+    aks_cluster_name              = try(module.aks_production.aks_cluster_name, null)
+    container_registry_name       = try(module.aks_production.container_registry_name, null)
+    container_registry_login_server = try(module.aks_production.container_registry_login_server, null)
+    key_vault_name                = try(module.aks_production.key_vault_name, null)
+    key_vault_uri                 = try(module.aks_production.key_vault_uri, null)
+    key_vault_id                  = try(module.aks_production.key_vault_id, null)
+    bastion_public_ip             = try(module.aks_production.bastion_public_ip, null)
+  }
+  description = "Production cluster outputs"
+}
+
+# Uncomment after deploying flux_weave module
+# output "flux_weave_info" {
+#   value = {
+#     flux_namespace         = try(module.flux_weave.flux_namespace, null)
+#     weave_gitops_namespace = try(module.flux_weave.weave_gitops_namespace, null)
+#     weave_admin_password   = try(module.flux_weave.weave_gitops_admin_password, null)
+#   }
+#   description = "Flux and Weave GitOps information"
+#   sensitive   = true
+# }
+
+#################################################################################
+# UPDATE KUBECONFIG AFTER AKS DEPLOYMENT
+#################################################################################
+
+# Automatically get credentials and update kubeconfig after successful deployment
+resource "null_resource" "update_kubeconfig" {
+  depends_on = [module.aks_production]
+
+  provisioner "local-exec" {
+    command = "az aks get-credentials --resource-group ${module.aks_production.resource_group_aks} --name ${module.aks_production.aks_cluster_name} --overwrite-existing && echo '✅ Kubeconfig updated successfully'"
   }
 
-  tags = local.common_tags
-
-  lifecycle {
-    ignore_changes = []
+  triggers = {
+    cluster_id = module.aks_production.aks_acr_attachment_token_id
   }
+}
+
+output "next_steps" {
+  value = <<-EOT
+    ✅ AKS Cluster deployed successfully!
+    
+    Your kubeconfig has been automatically updated.
+    
+    🌐 Terraform runner IP authorized: ${local.terraform_runner_ip}
+    
+    📝 Verify cluster connection:
+       kubectl cluster-info
+       kubectl get nodes
+    
+    🔑 Access cluster credentials:
+       kubectl config current-context
+    
+    🚀 Next: Deploy Flux + Weave GitOps
+       cd flux
+       terraform init
+       terraform apply
+       
+    Or run the automated script:
+       chmod +x flux/deploy.sh
+       flux/deploy.sh
+  EOT
+  description = "Next steps after AKS deployment"
 }

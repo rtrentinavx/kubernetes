@@ -13,27 +13,14 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
-    null = {
-      source  = "hashicorp/null"
-      version = "~> 3.0"
-    }
-    http = {
-      source  = "hashicorp/http"
-      version = "~> 3.0"
-    }
   }
 }
 
 provider "azurerm" {
-  subscription_id = "47ab116c-8c15-4453-b06a-3fecd09ebda9"
-  
+  subscription_id = var.subscription_id
   features {
     key_vault {
       purge_soft_delete_on_destroy = true
     }
   }
 }
-
-provider "azuread" {}
-
-provider "tls" {}
