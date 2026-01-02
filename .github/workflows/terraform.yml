@@ -20,7 +20,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. Run tfsec
+      # 2. Install Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      # 3. Run security checks
       - name: Run tfsec
         uses: aquasecurity/tfsec-action@v1.0.0
         with:
@@ -30,12 +36,6 @@ jobs:
       - name: Terraform Fmt
         run: terraform fmt -check
         working-directory: ${{ env.TF_WORKING_DIR }}
-
-      # 3. Install Terraform
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.0
 
       # 4. Authenticate to Google Cloud
       - name: Authenticate to Google Cloud
