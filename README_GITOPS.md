@@ -57,6 +57,13 @@ terraform output weave_access_url
 
 ---
 
+## 🤖 CI/CD
+
+This project includes a GitHub Actions workflow to automate the deployment of the underlying GKE infrastructure. For more details on the CI/CD pipeline, please see the [CI/CD section in the main README.md](../README.md#cicd).
+
+---
+
+
 ## 📊 Solution Comparison at a Glance
 
 | Aspect | ArgoCD | Flux v2 |

@@ -1,10 +1,33 @@
+# GKE Cluster and GitOps with Terraform
+
+This project provides a comprehensive setup for provisioning a Google Kubernetes Engine (GKE) cluster using Terraform. It also includes two production-ready GitOps solutions for deploying and managing applications on the cluster: ArgoCD and Flux.
+
+## Usage
+
+For detailed instructions on how to deploy and manage the GitOps solutions, please refer to the [GITOPS_README.md](GITOPS_README.md) file.
+
+## CI/CD
+
+This project uses GitHub Actions for continuous integration and deployment. The workflow is defined in the `.github/workflows/terraform.yml` file.
+
+The workflow performs the following steps:
+1.  Checks out the code.
+2.  Installs Terraform.
+3.  Authenticates to Google Cloud using Workload Identity Federation.
+4.  Runs `terraform init` to initialize the Terraform working directory.
+5.  Runs `terraform plan` on pull requests to preview the changes.
+6.  Runs `terraform apply` on pushes to the `main` branch to apply the changes.
+
+**Note:** There is a potential inconsistency in the `terraform.yml` file. The `TF_WORKING_DIR` environment variable is set to `./gke`, but the Terraform commands are executed in the `infra` directory. This might need to be corrected to `gke`.
+
 ## Requirements
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5.0 |
-| <a name="requirement_google"></a> [google](#requirement\_google) | >= 5.33.0 |
-| <a name="requirement_google-beta"></a> [google-beta](#requirement\_google-beta) | >= 5.33.0 |
+| <a name="requirement_terraform"></a> [terraform](#requirement_terraform) | >= 1.5.0 |
+| <a name="requirement_google"></a> [google](#requirement_google) | >= 5.33.0 |
+| <a name="requirement_google-beta"></a> [google-beta](#requirement_google-beta) | >= 5.33.0 |
+
 
 ## Providers
 
