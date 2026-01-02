@@ -26,7 +26,10 @@ jobs:
         with:
           working_directory: ${{ env.TF_WORKING_DIR }}
           soft_fail: true
-
+      
+      - name: Terraform Fmt
+        run: terraform fmt -check
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       # 3. Install Terraform
       - name: Setup Terraform

@@ -35,15 +35,15 @@ jobs:
 
       # 4. Run Terraform commands (now they have GCP creds)
       - name: Terraform Init
-        working-directory: infra
+        working-directory: gke
         run: terraform init -input=false
 
       - name: Terraform Plan
         if: github.event_name == 'pull_request'
-        working-directory: infra
+        working-directory: gke
         run: terraform plan -input=false
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        working-directory: infra
+        working-directory: gke
         run: terraform apply -auto-approve -input=false
