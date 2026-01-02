@@ -34,7 +34,7 @@ jobs:
           soft_fail: true
       
       - name: Terraform Fmt
-        run: terraform fmt -recusive -check
+        run: terraform fmt -check
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       # 4. Authenticate to Google Cloud
