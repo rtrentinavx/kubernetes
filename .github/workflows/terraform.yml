@@ -43,6 +43,7 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+          audience: "//iam.googleapis.com/projects/491625637231"
 
       # 5. Run Terraform commands
       - name: Terraform Init
