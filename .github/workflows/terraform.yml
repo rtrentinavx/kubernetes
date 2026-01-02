@@ -34,7 +34,7 @@ jobs:
           soft_fail: true
       
       - name: Terraform Fmt
-        run: terraform fmt -check
+        run: terraform fmt -recusive -check
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       # 4. Authenticate to Google Cloud
@@ -48,6 +48,10 @@ jobs:
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init -input=false
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate
 
       - name: Terraform Plan
         if: github.event_name == 'pull_request'

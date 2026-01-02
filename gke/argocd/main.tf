@@ -2,8 +2,8 @@
 # Reserve Static External IP for Argo CD LB
 ############################################
 resource "google_compute_address" "argocd_lb_ip" {
-  name   = "argocd-lb-ip"
-  region = var.region
+  name    = "argocd-lb-ip"
+  region  = var.region
   project = var.project
 }
 
@@ -43,8 +43,8 @@ resource "helm_release" "argocd" {
         }
         # If you don’t need HTTP/80, set `enabled=false` for http
         ports = {
-          http  = { enabled = true,  port = 80  }
-          https = { enabled = true,  port = 443 }
+          http  = { enabled = true, port = 80 }
+          https = { enabled = true, port = 443 }
         }
       }
     }

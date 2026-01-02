@@ -193,15 +193,15 @@ variable "deletion_protection" {
 variable "additional_node_pools" {
   description = "Map of additional node pools to create"
   type = map(object({
-    node_count         = number
-    min_node_count     = number
-    max_node_count     = number
-    machine_type       = string
-    disk_size_gb       = optional(number, 100)
-    disk_type          = optional(string, "pd-standard")
-    preemptible        = optional(bool, false)
-    spot               = optional(bool, false)
-    labels             = optional(map(string), {})
+    node_count     = number
+    min_node_count = number
+    max_node_count = number
+    machine_type   = string
+    disk_size_gb   = optional(number, 100)
+    disk_type      = optional(string, "pd-standard")
+    preemptible    = optional(bool, false)
+    spot           = optional(bool, false)
+    labels         = optional(map(string), {})
     taints = optional(list(object({
       key    = string
       value  = string

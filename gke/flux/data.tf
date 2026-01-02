@@ -16,10 +16,10 @@ data "kubernetes_service_account_v1" "terraform" {
 locals {
   flux_deployed_at = timestamp()
   deployment_info = {
-    flux_version          = var.flux_chart_version
-    weave_gitops_version  = var.weave_chart_version
-    github_repo           = "https://github.com/${var.github_owner}/${var.github_repo}"
-    flux_namespace        = var.flux_namespace
-    weave_namespace       = var.weave_namespace
+    flux_version         = var.flux_chart_version
+    weave_gitops_version = var.weave_chart_version
+    github_repo          = "https://github.com/${var.github_owner}/${var.github_repo}"
+    flux_namespace       = var.flux_namespace
+    weave_namespace      = var.weave_namespace
   }
 }

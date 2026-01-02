@@ -15,7 +15,7 @@ output "weave_admin_password" {
 }
 
 output "weave_access_instructions" {
-  value = "kubectl port-forward -n ${kubernetes_namespace_v1.weave_gitops.metadata[0].name} svc/weave-gitops 9001:80"
+  value       = "kubectl port-forward -n ${kubernetes_namespace_v1.weave_gitops.metadata[0].name} svc/weave-gitops 9001:80"
   description = "Command to access Weave GitOps UI via port-forward"
 }
 
@@ -35,7 +35,7 @@ output "flux_git_repo_url" {
 # }
 
 output "next_steps" {
-  value = <<-EOT
+  value       = <<-EOT
 Flux v2 and Weave GitOps have been deployed successfully!
 
 1. Access Weave GitOps UI:

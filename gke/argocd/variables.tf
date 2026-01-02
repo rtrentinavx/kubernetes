@@ -38,8 +38,8 @@ variable "gitops_repo_revision" {
 }
 
 variable "region" {
-  type = string
-  default = "us-east1"
+  type        = string
+  default     = "us-east1"
   description = "Region where GKE cluster and resources are deployed"
 }
 
@@ -50,6 +50,6 @@ variable "root_app_name" {
 }
 
 variable "project" {
-  type = string
+  type        = string
   description = "Project ID where GKE cluster and resources are deployed"
 }

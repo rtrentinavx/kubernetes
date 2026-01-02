@@ -11,10 +11,10 @@ locals {
   hash6                = substr(md5(local.hash_source), 0, 4)
 
   ssh_keys_concat = length(var.ssh_authorized_keys) > 0 ? join("\n", var.ssh_authorized_keys) : ""
-  
+
   # Auto-populate with current machine's IP
   my_public_ip = "${data.http.current_ip.response_body}/32"
-  
+
   master_authorized_networks = concat(
     [
       {
@@ -28,7 +28,7 @@ locals {
     ],
     var.additional_authorized_networks
   )
-  
+
   ssh_allowed_cidrs = [local.my_public_ip]
 
 }
@@ -235,7 +235,7 @@ resource "google_container_cluster" "cluster" {
       content {
         service_account = google_service_account.nodes.email
         oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
-        
+
         management {
           auto_upgrade = true
           auto_repair  = true
@@ -299,7 +299,7 @@ resource "google_container_node_pool" "default" {
 # Additional node pools
 resource "google_container_node_pool" "additional" {
   for_each = var.additional_node_pools
-  
+
   name     = "${each.key}-${local.hash6}"
   project  = var.project_id
   cluster  = google_container_cluster.cluster.name
