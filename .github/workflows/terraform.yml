@@ -20,30 +20,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. Install Terraform
+      # 2. Run tfsec
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: ${{ env.TF_WORKING_DIR }}
+
+      # 3. Install Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.0
 
-      # 3. Authenticate to Google Cloud  ← put it here
+      # 4. Authenticate to Google Cloud
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
 
-      # 4. Run Terraform commands (now they have GCP creds)
+      # 5. Run Terraform commands
       - name: Terraform Init
-        working-directory: infra
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init -input=false
 
       - name: Terraform Plan
         if: github.event_name == 'pull_request'
-        working-directory: infra
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform plan -input=false
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        working-directory: infra
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform apply -auto-approve -input=false
