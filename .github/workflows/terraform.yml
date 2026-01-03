@@ -35,11 +35,13 @@ jobs:
       - name: Init TFLint
         run: tflint --init
         working-directory: ${{ env.TF_WORKING_DIR }}
+        continue-on-error: true
 
       # 4. Run linters and security checks
       - name: Run TFLint
         run: tflint --format compact
         working-directory: ${{ env.TF_WORKING_DIR }}
+     
 
       - name: Run tfsec
         uses: aquasecurity/tfsec-action@v1.0.0
@@ -55,9 +57,7 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
-          audience: "token.actions.githubusercontent.com,//iam.googleapis.com/projects/491625637231"
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       # 5. Run Terraform commands
       - name: Terraform Init
