@@ -20,13 +20,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. Install Terraform
+      # 2. Install Terraform and TFLint
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.0
+      
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v3
+        with:
+          tflint_version: v0.50.3
 
-      # 3. Run security checks
+      # 3. Init TFLint
+      - name: Init TFLint
+        run: tflint --init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      # 4. Run linters and security checks
+      - name: Run TFLint
+        run: tflint --format compact
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
       - name: Run tfsec
         uses: aquasecurity/tfsec-action@v1.0.0
         with:
@@ -37,7 +51,7 @@ jobs:
         run: terraform fmt -check
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      # 4. Authenticate to Google Cloud
+      # 5. Authenticate to Google Cloud
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
